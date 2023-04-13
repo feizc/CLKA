@@ -1,1 +1,1 @@
-# CLKA: Cross Lingual Knowledge Alignment for Stable Diffusion Models
+## CLKA: Cross Lingual Knowledge Alignment for Stable Diffusion Models
