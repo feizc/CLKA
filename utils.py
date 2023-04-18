@@ -1,12 +1,39 @@
 from torch.utils.data import Dataset 
 import torch 
+import json 
+
 
 
 class CrossLingualDataset(Dataset): 
     def __init__(self, data_path, cn_tokenizer, en_tokenizer):
         self.cn_tokenizer = cn_tokenizer 
         self.en_tokenizer = en_tokenizer 
-        
+        with open(data_path, 'r') as f: 
+            data_list = json.load(f) 
+        self.data_list = data_list 
+    
+    def __len__(self): 
+        return len(self.data_list) 
+    
+    def __getitem__(self, index):
+        cn_sentence = self.data_list[index][0]
+        en_sentence = self.data_list[index][1] 
+
+        cn_ids = self.cn_tokenizer(
+            cn_sentence,
+            padding=True, 
+            return_tensors="pt"
+        ).input_ids
+        en_ids = self.en_tokenizer(
+            en_sentence,
+            padding="max_length",
+            max_length=self.en_tokenizer.model_max_length,
+            truncation=True,
+            return_tensors="pt",
+        ).input_ids
+
+        return cn_ids, en_ids 
+
 
 
 
