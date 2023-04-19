@@ -9,6 +9,7 @@ import os
 import argparse  
 from utils import CrossLingualDataset
 
+import torch.utils.tensorboard as tensorboard 
 
 
 def parse_args():
@@ -67,6 +68,18 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu") 
     train_batch_size = 1 
     gradient_accumulation_steps = 8
+    epochs = 10
+    tensorboard_path = 'log'
+
+    if torch.cuda.is_available():
+        # This enables tf32 on Ampere GPUs which is only 8% slower than
+        # float16 and almost as accurate as float32
+        # This was a default in pytorch until 1.12
+        torch.backends.cuda.matmul.allow_tf32 = True
+        torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.deterministic = False
+    
+    writer = tensorboard.SummaryWriter(tensorboard_path)
 
     # load model 
     cn_tokenizer = ChineseCLIPProcessor.from_pretrained(cn_ckpt_path).tokenizer
@@ -95,20 +108,21 @@ def main():
     )
 
 
-    for epoch in range(args.num_train_epochs): 
+    for epoch in range(epochs): 
         cn_text_encoder.train() 
         loss_cum = 0
         iteration = 0
+        num_batches_per_epoch = train_dataloader.num_batches
         with tqdm(enumerate(train_dataloader), total=len(train_dataloader)) as t:
             for step, batch in t: 
+                log_step = num_batches_per_epoch * epoch + step
                 iteration += 1 
                 cn_ids, en_ids = batch 
                 cn_ids, en_ids = cn_ids.to(device), en_ids.to(device) 
-
                 with torch.no_grad(): 
-                    en_embeds = en_text_encoder(en_ids,)
-                cn_embeds = cn_text_encoder.get_text_features(cn_ids,)
-                cn_embeds = cn_embeds / cn_embeds.norm(p=2, dim=-1, keepdim=True) 
+                    en_embeds = en_text_encoder(en_ids,)[0]
+                cn_embeds = cn_text_encoder.text_model(cn_ids,)[0]
+                
                 loss = F.mse_loss(cn_embeds.float(), en_embeds.float(), reduction="mean") 
                 loss = loss / gradient_accumulation_steps 
 
@@ -120,6 +134,11 @@ def main():
                 loss_cum += loss.item() 
                 t.set_description('Epoch %i' % epoch)
                 t.set_postfix(loss=loss_cum / (step + 1))
+                if step % 10 == 0:
+                    writer.add_scalar("train/loss", loss.item(), log_step)
+
+        print('save model') 
+        torch.save(cn_text_encoder.state_dict(), 'out.pt')
 
 
 if __name__ == "__main__":

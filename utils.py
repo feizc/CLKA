@@ -21,9 +21,13 @@ class CrossLingualDataset(Dataset):
 
         cn_ids = self.cn_tokenizer(
             cn_sentence,
-            padding=True, 
+            # padding=True,
+            padding="max_length",
+            max_length=77,
+            truncation=True,
             return_tensors="pt"
         ).input_ids
+
         en_ids = self.en_tokenizer(
             en_sentence,
             padding="max_length",
@@ -32,7 +36,7 @@ class CrossLingualDataset(Dataset):
             return_tensors="pt",
         ).input_ids
 
-        return cn_ids, en_ids 
+        return cn_ids.squeeze(0), en_ids.squeeze(0) 
 
 
 
